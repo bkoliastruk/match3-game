@@ -103,7 +103,7 @@ export class Grid {
         return type;
     }
 
-public findMatches(): boolean {
+    public findMatches(): boolean {
         let hasFoundMatch = false;
 
         this.getAllGems().forEach(gem => gem.isMatch = false);
@@ -141,6 +141,52 @@ public findMatches(): boolean {
         }
 
         return hasFoundMatch;
+    }
+
+    private getRandomSimpleType(): GemType {
+        const randomIdx = Math.floor(Math.random() * GEM_COLORS.length);
+        return GEM_COLORS[randomIdx];
+    }
+
+    public applyGravity(): void {
+        for (let c = 0; c < BOARD_COLS; c++) {
+            let columnGems: Gem[] = [];
+            for (let r = 0; r < BOARD_ROWS; r++) {
+                columnGems.push(this.cells[r][c]);
+            }
+
+            const survivingGems = columnGems.filter(gem => !gem.isMatch);
+            const emptySlots = BOARD_ROWS - survivingGems.length;
+
+            const newGems: Gem[] = [];
+            for (let i = 0; i < emptySlots; i++) {
+                const randomType = this.getRandomSimpleType();
+
+                newGems.push(new Gem(0, c, randomType));
+            }
+
+            const newColumn = [...newGems, ...survivingGems];
+
+            for (let r = 0; r < BOARD_ROWS; r++) {
+                const gem = newColumn[r];
+
+                gem.row = r;
+                gem.col = c;
+                gem.isMatch = false;
+
+                gem.snapToGrid(); 
+
+                this.cells[r][c] = gem;
+            }
+        }
+    }
+
+    /**
+     * Updates all gems in the grid.
+     * @param deltaTime Time elapsed in seconds.
+     */
+    public update(deltaTime: number): void {
+        this.getAllGems().forEach(gem => gem.update(deltaTime));
     }
 
     /**

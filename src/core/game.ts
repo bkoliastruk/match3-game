@@ -1,6 +1,7 @@
 // src/core/main.ts
 import { Grid } from '../logic/Grid';
 import { Gem } from '../logic/Gem';
+import { GameField } from '../graphics/gameField'
 import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE } from '../configs/constants';
 
 export class Game {
@@ -8,7 +9,6 @@ export class Game {
     private ctx: CanvasRenderingContext2D;
     private grid: Grid;
     private lastTime: number = 0;
-    
     private selectedGem: Gem | null = null;
     private isProcessing: boolean = false;
 
@@ -18,14 +18,14 @@ export class Game {
             throw new Error(`Canvas with id "${canvasId}" not found`);
         }
         this.canvas = canvasElement as HTMLCanvasElement;
-        
+
         const context = this.canvas.getContext('2d');
         if (!context) {
             throw new Error('Could not get 2D context');
         }
         this.ctx = context;
 
-        // Set actual canvas size (bitmap resolution)
+        // Set actual canvas size
         this.canvas.width = BOARD_WIDTH;
         this.canvas.height = BOARD_HEIGHT;
 
@@ -42,12 +42,11 @@ export class Game {
     /**
      * Handles user clicks with fixed coordinate scaling.
      */
-    private handleInput(event: MouseEvent): void {
+    private async handleInput(event: MouseEvent): Promise<void> {
         if (this.isProcessing) return;
 
         const rect = this.canvas.getBoundingClientRect();
         
-        // CRITICAL FIX: Calculate scaling factors
         // This ensures clicks work even if Canvas is resized via CSS
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
@@ -58,7 +57,6 @@ export class Game {
         const col = Math.floor(mouseX / CELL_SIZE);
         const row = Math.floor(mouseY / CELL_SIZE);
 
-        // Debug logging to verify clicks
         console.log(`Click at Col: ${col}, Row: ${row}`);
 
         const clickedGem = this.grid.getGem(row, col);
@@ -97,26 +95,45 @@ export class Game {
         return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
     }
 
-    private swapGems(gem1: Gem, gem2: Gem): void {
-        this.grid.swapGems(gem1, gem2);
-        gem1.snapToGrid();
-        gem2.snapToGrid();
+    private async handleMatches(): Promise<void> {
+        while (this.grid.findMatches()) {
+            await new Promise(resolve => setTimeout(resolve, 250));
 
+            this.grid.applyGravity();
+
+            await new Promise(resolve => setTimeout(resolve, 400));
+        }
+        console.log("Grid is clean. Cascade finished.");
+    }
+
+    private async swapGems(gem1: Gem, gem2: Gem): Promise<void> {
+        if (this.isProcessing) return;
+        this.isProcessing = true;
+
+        // Logical Swap
+        this.grid.swapGems(gem1, gem2);
+        
+        // Wait for swap animation
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Initial Match Check
         const hasMatch = this.grid.findMatches();
 
         if (hasMatch) {
-            console.log("Match found!");
+            console.log("Match found! Starting cascade...");
             this.deselectGem();
+            
+            // Start the cascade sequence (Remove -> Gravity -> Check again)
+            await this.handleMatches();
+            
         } else {
             console.log("No match. Reverting swap.");
-
-            this.grid.swapGems(gem1, gem2); 
-
-            gem1.snapToGrid(); 
-            gem2.snapToGrid();
-            
+            this.grid.swapGems(gem1, gem2);
+            await new Promise(resolve => setTimeout(resolve, 300));
             this.deselectGem();
         }
+
+        this.isProcessing = false; // Finally unlock input
     }
 
     private loop(timestamp: number): void {
@@ -130,33 +147,25 @@ export class Game {
     }
 
     private update(deltaTime: number): void {
-        // Animation logic placeholder
+        // Convert ms to seconds for smoother math
+        this.grid.update(deltaTime / 1000);
     }
 
     /**
      * Updated Render: Explicit drawing order for highlights
      */
     private render(): void {
-        // 1. Clear
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // 2. Background
+        // Background
         this.ctx.fillStyle = '#2c3e50';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         const gems = this.grid.getAllGems();
         
         gems.forEach(gem => {
-            const centerX = gem.x + CELL_SIZE / 2;
-            const centerY = gem.y + CELL_SIZE / 2;
-            const radius = (CELL_SIZE / 2) - 5;
-
-            // A. Draw Gem Body
-            this.ctx.beginPath();
-            this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            this.ctx.fillStyle = this.getGemColor(gem.type);
-            this.ctx.fill();
-            this.ctx.closePath();
+            const figure = new Figure(this.ctx, gem);
+            figure.drawCircle()
 
             // B. Draw Match Highlight (Inner Glow)
             // If the gem is part of a match (3, 4, or 5 in a row)
@@ -187,18 +196,6 @@ export class Game {
                 this.ctx.closePath();
             }
         });
-    }
-
-    private getGemColor(type: string): string {
-        switch (type) {
-            case 'red': return '#e74c3c';
-            case 'blue': return '#3498db';
-            case 'green': return '#2ecc71';
-            case 'yellow': return '#f1c40f';
-            case 'purple': return '#9b59b6';
-            case 'orange': return '#e67e22';
-            default: return '#95a5a6';
-        }
     }
 }
 
