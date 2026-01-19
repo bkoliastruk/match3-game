@@ -1,5 +1,5 @@
 import { Gem } from './Gem';
-import type { GemType } from '../types/types';
+import type { GemColors } from '../types/types';
 import { GEM_COLORS, BOARD_ROWS, BOARD_COLS} from '../configs/constants';
 
 export class Grid {
@@ -19,11 +19,13 @@ export class Grid {
         
         for (let r = 0; r < BOARD_ROWS; r++) {
             const row: Gem[] = [];
+
             for (let c = 0; c < BOARD_COLS; c++) {
                 // Select a type that doesn't create a match
-                const type = this.getRandomTypeNoMatch(r, c, row);
-                row.push(new Gem(r, c, type));
+                const color = this.getRandomTypeNoMatch(r, c, row);
+                row.push(new Gem(r, c, color));
             }
+
             this.cells.push(row);
         }
     }
@@ -69,23 +71,23 @@ export class Grid {
      * Generates a random gem type while checking left and top neighbors
      * to prevent creating a match during generation.
      */
-    private getRandomTypeNoMatch(r: number, c: number, currentRow: Gem[]): GemType {
-        let type: GemType;
+    private getRandomTypeNoMatch(r: number, c: number, currentRow: Gem[]): GemColors {
+        let color: GemColors;
         let isMatch: boolean;
 
         do {
             isMatch = false;
-            // 1. Generate a random index from 0 to GEM_COLORS.length - 1
+            // Generate a random index from 0 to GEM_COLORS.length - 1
             const randomIdx = Math.floor(Math.random() * GEM_COLORS.length);
             
-            // 2. Retrieve the actual string type (e.g., 'red') using the index
-            type = GEM_COLORS[randomIdx];
+            // Retrieve the actual string gem color
+            color = GEM_COLORS[randomIdx];
 
             // Check horizontal (left)
             if (c >= 2) {
                 const left1 = currentRow[c - 1];
                 const left2 = currentRow[c - 2];
-                if (left1.type === type && left2.type === type) {
+                if (left1.color === color && left2.color === color) {
                     isMatch = true;
                 }
             }
@@ -94,13 +96,13 @@ export class Grid {
             if (r >= 2) {
                 const top1 = this.cells[r - 1][c];
                 const top2 = this.cells[r - 2][c];
-                if (top1.type === type && top2.type === type) {
+                if (top1.color === color && top2.color === color) {
                     isMatch = true;
                 }
             }
         } while (isMatch);
 
-        return type;
+        return color;
     }
 
     public findMatches(): boolean {
@@ -115,7 +117,7 @@ export class Grid {
                 const gem2 = this.cells[r][c + 1];
                 const gem3 = this.cells[r][c + 2];
 
-                if (gem1.type === gem2.type && gem1.type === gem3.type) {
+                if (gem1.color === gem2.color && gem1.color === gem3.color) {
                     gem1.isMatch = true;
                     gem2.isMatch = true;
                     gem3.isMatch = true;
@@ -131,7 +133,7 @@ export class Grid {
                 const gem2 = this.cells[r + 1][c];
                 const gem3 = this.cells[r + 2][c];
 
-                if (gem1.type === gem2.type && gem1.type === gem3.type) {
+                if (gem1.color === gem2.color && gem1.color === gem3.color) {
                     gem1.isMatch = true;
                     gem2.isMatch = true;
                     gem3.isMatch = true;
@@ -143,26 +145,28 @@ export class Grid {
         return hasFoundMatch;
     }
 
-    private getRandomSimpleType(): GemType {
+    private getRandomSimpleColor(): GemColors {
         const randomIdx = Math.floor(Math.random() * GEM_COLORS.length);
         return GEM_COLORS[randomIdx];
     }
 
+
     public applyGravity(): void {
         for (let c = 0; c < BOARD_COLS; c++) {
             let columnGems: Gem[] = [];
+
             for (let r = 0; r < BOARD_ROWS; r++) {
                 columnGems.push(this.cells[r][c]);
             }
 
             const survivingGems = columnGems.filter(gem => !gem.isMatch);
             const emptySlots = BOARD_ROWS - survivingGems.length;
-
             const newGems: Gem[] = [];
-            for (let i = 0; i < emptySlots; i++) {
-                const randomType = this.getRandomSimpleType();
 
-                newGems.push(new Gem(0, c, randomType));
+            for (let i = 0; i < emptySlots; i++) {
+                const randomColor = this.getRandomSimpleColor();
+
+                newGems.push(new Gem(0, c, randomColor));
             }
 
             const newColumn = [...newGems, ...survivingGems];
@@ -173,7 +177,6 @@ export class Grid {
                 gem.row = r;
                 gem.col = c;
                 gem.isMatch = false;
-
                 gem.snapToGrid(); 
 
                 this.cells[r][c] = gem;

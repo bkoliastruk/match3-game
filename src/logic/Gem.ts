@@ -1,5 +1,5 @@
 import { CELL_SIZE } from '../configs/constants';
-import type { GemType } from '../types/types';
+import type { GemColors } from '../types/types';
 
 export class Gem {
     // Visual coordinates (pixel position)
@@ -15,7 +15,7 @@ export class Gem {
     constructor(
         public row: number,
         public col: number,
-        public readonly type: GemType
+        public readonly color: GemColors
     ) {
         //Canvas size for GEM
         this.x = this.col * this.size;

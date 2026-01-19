@@ -1,8 +1,7 @@
-// src/core/main.ts
 import { Grid } from '../logic/Grid';
 import { Gem } from '../logic/Gem';
-import { GameField } from '../graphics/gameField'
-import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE } from '../configs/constants';
+import { GemRenderer } from '../graphics/GemRender'
+import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE, BACKGROUND_COLOR } from '../configs/constants';
 
 export class Game {
     private canvas: HTMLCanvasElement;
@@ -11,19 +10,23 @@ export class Game {
     private lastTime: number = 0;
     private selectedGem: Gem | null = null;
     private isProcessing: boolean = false;
+    private gemRenderer: GemRenderer;
 
     constructor(canvasId: string) {
         const canvasElement = document.getElementById(canvasId);
         if (!canvasElement) {
             throw new Error(`Canvas with id "${canvasId}" not found`);
         }
+
         this.canvas = canvasElement as HTMLCanvasElement;
 
         const context = this.canvas.getContext('2d');
         if (!context) {
             throw new Error('Could not get 2D context');
         }
+
         this.ctx = context;
+        this.gemRenderer = new GemRenderer(this.ctx);
 
         // Set actual canvas size
         this.canvas.width = BOARD_WIDTH;
@@ -79,6 +82,7 @@ export class Game {
     private selectGem(gem: Gem): void {
         this.selectedGem = gem;
         gem.isSelected = true;
+
         console.log(`Selected gem at ${gem.row},${gem.col}`);
     }
 
@@ -103,7 +107,8 @@ export class Game {
 
             await new Promise(resolve => setTimeout(resolve, 400));
         }
-        console.log("Grid is clean. Cascade finished.");
+
+        console.log("Grid is clean. Cascade finished."); // debug
     }
 
     private async swapGems(gem1: Gem, gem2: Gem): Promise<void> {
@@ -120,20 +125,21 @@ export class Game {
         const hasMatch = this.grid.findMatches();
 
         if (hasMatch) {
-            console.log("Match found! Starting cascade...");
+            console.log("Match found! Starting cascade..."); // debug
             this.deselectGem();
             
-            // Start the cascade sequence (Remove -> Gravity -> Check again)
+            // Start the cascade
             await this.handleMatches();
             
         } else {
-            console.log("No match. Reverting swap.");
+            console.log("No match. Reverting swap."); // debug
+
             this.grid.swapGems(gem1, gem2);
             await new Promise(resolve => setTimeout(resolve, 300));
             this.deselectGem();
         }
 
-        this.isProcessing = false; // Finally unlock input
+        this.isProcessing = false;
     }
 
     private loop(timestamp: number): void {
@@ -147,7 +153,6 @@ export class Game {
     }
 
     private update(deltaTime: number): void {
-        // Convert ms to seconds for smoother math
         this.grid.update(deltaTime / 1000);
     }
 
@@ -158,43 +163,13 @@ export class Game {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Background
-        this.ctx.fillStyle = '#2c3e50';
+        this.ctx.fillStyle = BACKGROUND_COLOR;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         const gems = this.grid.getAllGems();
-        
+
         gems.forEach(gem => {
-            const figure = new Figure(this.ctx, gem);
-            figure.drawCircle()
-
-            // B. Draw Match Highlight (Inner Glow)
-            // If the gem is part of a match (3, 4, or 5 in a row)
-            if (gem.isMatch) {
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; // Semi-transparent white
-                this.ctx.fill();
-                this.ctx.closePath();
-            }
-
-            // C. Draw Selection Border (Outer Ring)
-            // Must be drawn LAST to be on top
-            if (gem.isSelected) {
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, radius + 2, 0, Math.PI * 2); // Slightly larger
-                this.ctx.strokeStyle = '#ffffff'; // Bright White
-                this.ctx.lineWidth = 4;
-                this.ctx.stroke();
-                this.ctx.closePath();
-            } else {
-                // Default subtle border
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                this.ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-                this.ctx.lineWidth = 1;
-                this.ctx.stroke();
-                this.ctx.closePath();
-            }
+            this.gemRenderer.draw(gem); 
         });
     }
 }
