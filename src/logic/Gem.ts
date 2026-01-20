@@ -1,4 +1,4 @@
-import { CELL_SIZE } from '../configs/constants';
+import { CELL_SIZE, ANIMATION_SPEED } from '../configs/constants';
 import type { GemColors } from '../types/types';
 
 export class Gem {
@@ -11,6 +11,7 @@ export class Gem {
 
     // Constant configuration for this instance
     public readonly size: number = CELL_SIZE;
+    private readonly speed: number = ANIMATION_SPEED;
 
     constructor(
         public row: number,
@@ -22,33 +23,47 @@ export class Gem {
         this.y = this.row * this.size;
     }
 
-    public update(deltaTime: number): void {
+    public get isMoving(): boolean {
         const targetX = this.col * this.size;
         const targetY = this.row * this.size;
+        
+        // Перевіряємо різницю з допуском в 1 піксель
+        return Math.abs(this.x - targetX) > 1 || Math.abs(this.y - targetY) > 1;
+    }
 
-        // Calculate distance to target
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
+    public update(dt: number): boolean {
+        const targetY = this.row * this.size;
+        const targetX = this.col * this.size;
+        
+        // 1. Handle Y movement (Falling)
+        if (Math.abs(this.y - targetY) > 1) {
+            if (this.y < targetY) {
+                // Падаємо вниз
+                this.y += this.speed * dt;
+                if (this.y > targetY) this.y = targetY; 
+            } else {
+                // --- ВИПРАВЛЕННЯ ТУТ ---
+                // Рухаємось вгору (раніше тут був миттєвий телепорт)
+                this.y -= this.speed * dt;
+                if (this.y < targetY) this.y = targetY;
+            }
+        } else {
+            this.y = targetY; // Приїхали
+        }
 
-        // Move towards target
-        // We multiply by a speed factor (e.g., 10) to control animation speed
-        // If distance is very small, snap to exact position to stop jittering
-        if (Math.abs(dx) > 1) {
-            this.x += dx * 10 * deltaTime; 
+        // 2. Handle X movement (Swapping)
+        if (Math.abs(this.x - targetX) > 1) {
+            if (this.x < targetX) {
+                this.x += this.speed * dt;
+                if (this.x > targetX) this.x = targetX;
+            } else {
+                this.x -= this.speed * dt;
+                if (this.x < targetX) this.x = targetX;
+            }
         } else {
             this.x = targetX;
         }
 
-        if (Math.abs(dy) > 1) {
-            this.y += dy * 10 * deltaTime;
-        } else {
-            this.y = targetY;
-        }
-    }
-
-    //Snaps the visual coordinates (x, y) to match the logical grid position (row, col)
-    public snapToGrid(): void {
-        this.x = this.col * this.size;
-        this.y = this.row * this.size;
+        return this.isMoving;
     }
 }

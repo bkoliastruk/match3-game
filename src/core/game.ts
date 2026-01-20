@@ -1,7 +1,7 @@
 import { Grid } from '../logic/Grid';
 import { Gem } from '../logic/Gem';
-import { GemRenderer } from '../graphics/GemRender'
-import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE, BACKGROUND_COLOR } from '../configs/constants';
+import { GemRenderer } from '../graphics/GemRender';
+import { BOARD_WIDTH, BOARD_HEIGHT, CELL_SIZE, BACKGROUND_COLOR, GameState } from '../configs/constants';
 
 export class Game {
     private canvas: HTMLCanvasElement;
@@ -9,7 +9,7 @@ export class Game {
     private grid: Grid;
     private lastTime: number = 0;
     private selectedGem: Gem | null = null;
-    private isProcessing: boolean = false;
+    private state: GameState = GameState.IDLE;
     private gemRenderer: GemRenderer;
 
     constructor(canvasId: string) {
@@ -28,7 +28,6 @@ export class Game {
         this.ctx = context;
         this.gemRenderer = new GemRenderer(this.ctx);
 
-        // Set actual canvas size
         this.canvas.width = BOARD_WIDTH;
         this.canvas.height = BOARD_HEIGHT;
 
@@ -42,15 +41,13 @@ export class Game {
         requestAnimationFrame(this.loop);
     }
 
-    /**
-     * Handles user clicks with fixed coordinate scaling.
-     */
     private async handleInput(event: MouseEvent): Promise<void> {
-        if (this.isProcessing) return;
+        // Block input if the game is animating
+        if (this.state !== GameState.IDLE) return;
 
         const rect = this.canvas.getBoundingClientRect();
         
-        // This ensures clicks work even if Canvas is resized via CSS
+        // Calculate scaling factors
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
 
@@ -65,24 +62,89 @@ export class Game {
         const clickedGem = this.grid.getGem(row, col);
         if (!clickedGem) return;
 
+        // SELECTION LOGIC (Fixed duplication)
         if (this.selectedGem === null) {
+            // Select the first gem
             this.selectGem(clickedGem);
         } else {
+            // A gem is already selected
             if (this.selectedGem === clickedGem) {
                 this.deselectGem();
             } else if (this.isNeighbor(this.selectedGem, clickedGem)) {
-                this.swapGems(this.selectedGem, clickedGem);
+                await this.handleSwapInteraction(this.selectedGem, clickedGem);
             } else {
+                // Clicked a non-neighbor -> Select the new gem instead
                 this.deselectGem();
                 this.selectGem(clickedGem);
             }
         }
     }
 
+    // Main interaction method
+    private async handleSwapInteraction(gem1: Gem, gem2: Gem): Promise<void> {
+        this.state = GameState.ANIMATING; // Lock input
+
+        // 1. Start logical swap
+        this.grid.swapGems(gem1, gem2);
+
+        // 2. Wait for swap animation to finish
+        await this.waitForAnimations(); 
+
+        // 3. Check for matches
+        const hasMatch = this.grid.findMatches();
+
+        if (hasMatch) {
+            this.deselectGem();
+            // Start the cascade (remove -> fall -> check again)
+            await this.processCascade();
+        } else {
+            // No match found -> Swap back
+            this.grid.swapGems(gem1, gem2);
+            await this.waitForAnimations();
+            this.deselectGem();
+        }
+
+        this.state = GameState.IDLE; // Unlock input
+    }
+
+    private async processCascade(): Promise<void> {
+        let matchesFound = true;
+
+        while (matchesFound) {
+            // Short delay to let user see the match
+            await this.delay(200);
+
+            // Remove matches and spawn new gems (logic)
+            this.grid.applyGravity();
+
+            // Wait for falling animation to finish
+            await this.waitForAnimations();
+
+            // Check if falling gems created new matches
+            matchesFound = this.grid.findMatches();
+        }
+    }
+
+    private async waitForAnimations(): Promise<void> {
+        return new Promise(resolve => {
+            const check = () => {
+                if (!this.grid.isAnimating()) {
+                    resolve();
+                } else {
+                    requestAnimationFrame(check);
+                }
+            };
+            check();
+        });
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     private selectGem(gem: Gem): void {
         this.selectedGem = gem;
         gem.isSelected = true;
-
         console.log(`Selected gem at ${gem.row},${gem.col}`);
     }
 
@@ -99,50 +161,14 @@ export class Game {
         return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
     }
 
-    private async handleMatches(): Promise<void> {
-        while (this.grid.findMatches()) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-
-            this.grid.applyGravity();
-
-            await new Promise(resolve => setTimeout(resolve, 400));
-        }
-
-        console.log("Grid is clean. Cascade finished."); // debug
-    }
-
-    private async swapGems(gem1: Gem, gem2: Gem): Promise<void> {
-        if (this.isProcessing) return;
-        this.isProcessing = true;
-
-        // Logical Swap
-        this.grid.swapGems(gem1, gem2);
-        
-        // Wait for swap animation
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Initial Match Check
-        const hasMatch = this.grid.findMatches();
-
-        if (hasMatch) {
-            console.log("Match found! Starting cascade..."); // debug
-            this.deselectGem();
-            
-            // Start the cascade
-            await this.handleMatches();
-            
-        } else {
-            console.log("No match. Reverting swap."); // debug
-
-            this.grid.swapGems(gem1, gem2);
-            await new Promise(resolve => setTimeout(resolve, 300));
-            this.deselectGem();
-        }
-
-        this.isProcessing = false;
-    }
-
     private loop(timestamp: number): void {
+        // Prevent huge delta time on the first frame
+        if (this.lastTime === 0) {
+            this.lastTime = timestamp;
+            requestAnimationFrame(this.loop);
+            return;
+        }
+
         const deltaTime = timestamp - this.lastTime;
         this.lastTime = timestamp;
 
@@ -153,21 +179,17 @@ export class Game {
     }
 
     private update(deltaTime: number): void {
+        // Convert milliseconds to seconds for physics
         this.grid.update(deltaTime / 1000);
     }
 
-    /**
-     * Updated Render: Explicit drawing order for highlights
-     */
     private render(): void {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Background
         this.ctx.fillStyle = BACKGROUND_COLOR;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         const gems = this.grid.getAllGems();
-
         gems.forEach(gem => {
             this.gemRenderer.draw(gem); 
         });

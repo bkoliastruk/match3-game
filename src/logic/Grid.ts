@@ -1,6 +1,6 @@
 import { Gem } from './Gem';
 import type { GemColors } from '../types/types';
-import { GEM_COLORS, BOARD_ROWS, BOARD_COLS} from '../configs/constants';
+import { GEM_COLORS, BOARD_ROWS, BOARD_COLS, CELL_SIZE} from '../configs/constants';
 
 export class Grid {
     private cells: Gem[][];
@@ -150,36 +150,45 @@ export class Grid {
         return GEM_COLORS[randomIdx];
     }
 
-
     public applyGravity(): void {
         for (let c = 0; c < BOARD_COLS; c++) {
-            let columnGems: Gem[] = [];
-
+            // 1. Collect gems that are NOT matches (survivors)
+            const survivors: Gem[] = [];
             for (let r = 0; r < BOARD_ROWS; r++) {
-                columnGems.push(this.cells[r][c]);
+                const gem = this.cells[r][c];
+                if (!gem.isMatch) {
+                    survivors.push(gem);
+                }
             }
 
-            const survivingGems = columnGems.filter(gem => !gem.isMatch);
-            const emptySlots = BOARD_ROWS - survivingGems.length;
-            const newGems: Gem[] = [];
+            // 2. Calculate how many are missing
+            const missingCount = BOARD_ROWS - survivors.length;
 
-            for (let i = 0; i < emptySlots; i++) {
-                const randomColor = this.getRandomSimpleColor();
+            if (missingCount > 0) {
+                // 3. Create NEW gems to fill the top
+                const newGems: Gem[] = [];
+                for (let i = 0; i < missingCount; i++) {
+                    const newColor = this.getRandomSimpleColor();
+                    // Logical row will be fixed later in step 4
+                    const newGem = new Gem(0, c, newColor);
+                    
+                    // THE ANIMATION TRICK
+                    newGem.y = -CELL_SIZE * (missingCount - i);
+                    
+                    newGems.push(newGem);
+                }
 
-                newGems.push(new Gem(0, c, randomColor));
-            }
+                // 4. Rebuild the column: [New Gems] on top + [Survivors] below
+                const newColumn = [...newGems, ...survivors];
 
-            const newColumn = [...newGems, ...survivingGems];
-
-            for (let r = 0; r < BOARD_ROWS; r++) {
-                const gem = newColumn[r];
-
-                gem.row = r;
-                gem.col = c;
-                gem.isMatch = false;
-                gem.snapToGrid(); 
-
-                this.cells[r][c] = gem;
+                // 5. Update the grid cells and logical 'row' property
+                for (let r = 0; r < BOARD_ROWS; r++) {
+                    const gem = newColumn[r];
+                    gem.row = r; // Logical update
+                    gem.col = c;
+                    gem.isMatch = false; // Reset flags
+                    this.cells[r][c] = gem;
+                }
             }
         }
     }
@@ -197,5 +206,10 @@ export class Grid {
      */
     private isValidPosition(row: number, col: number): boolean {
         return row >= 0 && row < BOARD_ROWS && col >= 0 && col < BOARD_COLS;
+    }
+
+    // Check if Animation is working
+    public isAnimating(): boolean {
+        return this.getAllGems().some(gem => gem.isMoving); 
     }
 }

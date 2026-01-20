@@ -13,7 +13,7 @@ export const BOARD_WIDTH = BOARD_COLS * CELL_SIZE;
 export const BOARD_HEIGHT = BOARD_ROWS * CELL_SIZE;
 
 // Speed animation
-export const ANIMATION_SPEED = 0.2;
+export const ANIMATION_SPEED = 300;
 
 // Figure/Color mapping
 export const FIGURE_COLOR_MAPPING: Record<GemColors, Figures> = {
@@ -39,3 +39,9 @@ export const BACKGROUND_COLOR: string = '#2c4359';
 // Default VALUES
 export const DEFAULT_COLOR_ID: string = '#95a5a6';
 export const DEFAULT_FIGURE_NAME: string = 'circle';
+
+// Game States
+export enum GameState {
+    IDLE,       // Ready for input
+    ANIMATING   // Gems are falling
+}
