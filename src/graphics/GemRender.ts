@@ -15,7 +15,7 @@ export class GemRenderer {
     private getFigureName(color: GemColors): string {
         return FIGURE_COLOR_MAPPING[color] || DEFAULT_FIGURE_NAME;
     }
-    
+
     private getFillColor(color: GemColors): string {
         return GEM_COLOR_ID_MAPPING[color] || DEFAULT_COLOR_ID;
     }
